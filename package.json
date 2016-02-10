@@ -1,0 +1,24 @@
+{
+  "name": "assetstore",
+  "version": "1.0.0",
+  "description": "A self-hosted clone of S3",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asyrique/assetstore.git"
+  },
+  "author": "Asyrique Thevendran <asyrique@gmail.com> (life.asyrique.me)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/asyrique/assetstore/issues"
+  },
+  "homepage": "https://github.com/asyrique/assetstore#readme",
+  "dependencies": {
+    "mz": "^2.3.1",
+    "nedb": "^1.7.4",
+    "restify": "^4.0.3"
+  }
+}
