@@ -57,6 +57,7 @@ server.get('/', (req, res, next) => {
   next();
 });
 
+/* ##################### GET /:session ########################### */
 server.get('/:session', (req, res, next) => {
   const dirPath = path.join(fileBaseDir, req.params.session);
 
@@ -77,6 +78,8 @@ server.get('/:session', (req, res, next) => {
   });
   next();
 });
+
+/* ##################### PUT /:session//:filename ########################### */
 server.put('/:session/:filename', (req, res, next) => {
   // const {session, filename, data} = req.params;
   const dirPath = path.join(fileBaseDir, req.params.session);
@@ -213,4 +216,11 @@ server.put('/:session/:filename', (req, res, next) => {
   next();
 });
 
+/* ##################### GET /:session//:filename ########################### */
+server.get('/:session/:filename', (req, res, next) => {
+  const dirPath = path.join(fileBaseDir, req.params.session);
+  const filePath = path.join(dirPath, req.params.filename);
+  const fileKey = req.params.filename.split('.')[0];
+  next();
+});
 server.listen(port);
