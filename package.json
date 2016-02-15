@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/asyrique/assetstore#readme",
   "dependencies": {
+    "bunyan": "^1.6.0",
     "mz": "^2.3.1",
     "nedb": "^1.7.4",
     "restify": "^4.0.3"
