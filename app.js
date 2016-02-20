@@ -5,6 +5,7 @@ const Datastore = require('nedb');
 const path = require('path');
 const fs = require('mz/fs');
 const crypto = require('mz/crypto');
+const mime = require('mime');
 const bunyan = require('bunyan');
 
 const port = process.env.PORT || 8080;
@@ -35,6 +36,8 @@ server.on('after', restify.auditLogger({
 //     key: {
 //       path: 'path/to/file',
 //       modified: [Date object],
+//       size: 12345, <In Bytes>,
+//       mime: 'text/plain',
 //       updated: <number of times updated>,
 //       hash: <md5hash>,
 //     },
@@ -61,12 +64,12 @@ server.get('/', (req, res, next) => {
 server.get('/:session', (req, res, next) => {
   const dirPath = path.join(fileBaseDir, req.params.session);
 
-  console.log(`Incoming GET for session ${req.params.session}.`);
+  log.info(`Incoming GET for session ${req.params.session}.`);
   db.find({
     sessionId: req.params.session,
   }, (err, docs) => {
     if (docs.length === 0) {
-      console.log(`Session ID ${req.params.session} not found`);
+      log.info(`Session ID ${req.params.session} not found`);
       res.json(404, {
         status: 404,
         message: `Session ID ${req.params.session} not found`,
@@ -79,21 +82,21 @@ server.get('/:session', (req, res, next) => {
   next();
 });
 
-/* ##################### PUT /:session//:filename ########################### */
-server.put('/:session/:filename', (req, res, next) => {
+/* ##################### PUT & POST /:session/:filename ########################### */
+function putAndPostHandler (req, res, next) {
   // const {session, filename, data} = req.params;
   const dirPath = path.join(fileBaseDir, req.params.session);
   const filePath = path.join(dirPath, req.params.filename);
   const fileKey = req.params.filename.split('.')[0];
-  console.log(`Incoming PUT for session ${req.params.session} with file ${req.params.filename}, size: ${req.params.data.length} bytes`);
+  log.info(`Incoming PUT for session ${req.params.session} with file ${req.params.filename}, size: ${req.params.data.length} bytes`);
   db.find({
     sessionId: req.params.session,
   }, (err, docs) => {
     if (docs.length === 1) {
       const sessionObject = docs[0];
-      console.log(sessionObject.assets[fileKey]);
+      log.info(sessionObject.assets[fileKey]);
       if (sessionObject.assets[fileKey]) {
-        console.log('This asset already exists. It will be overwritten.');
+        log.info('This asset already exists. It will be overwritten.');
       }
       fs.writeFile(filePath, req.params.data)
         .then(() => {
@@ -112,24 +115,30 @@ server.put('/:session/:filename', (req, res, next) => {
         })
         .then((filehash) => {
           if (fs.statSync(filePath).size === req.params.data.length) {
-            console.log('File on disk matches sent data. Assuming this means file was written successfully.');
+            log.info('File on disk matches sent data. Assuming this means file was written successfully.');
             const assetModifiedObj = {};
             const assetUpdatedObj = {};
             assetModifiedObj[`assets.${fileKey}.modified`] = Date.now();
+            assetModifiedObj[`assets.${fileKey}.size`] = req.params.data.length;
+            assetModifiedObj[`assets.${fileKey}.mime`] = mime.lookup(filePath);
             assetModifiedObj[`assets.${fileKey}.path`] = filePath;
             assetModifiedObj[`assets.${fileKey}.hash`] = filehash;
-            assetUpdatedObj[`assets.${fileKey}.updated`] = 1;
+            if (sessionObject.assets[fileKey]) {
+              assetUpdatedObj[`assets.${fileKey}.updated`] = 1;
+            } else {
+              assetUpdatedObj[`assets.${fileKey}.updated`] = 0;
+            }
             db.update({
               sessionId: req.params.session,
             }, {
               $set: assetModifiedObj,
               $inc: assetUpdatedObj,
             }, { upsert: true }, (error, numReplaced, upsert) => {
-              console.log(`Document inserted: ${upsert}`);
+              log.info(`Document inserted: ${upsert}`);
               if (error) {
                 return error;
               }
-              console.log(`Number of docs replaced: ${numReplaced}`);
+              log.info(`Number of docs replaced: ${numReplaced}`);
             });
           }
         }, error => {
@@ -185,6 +194,8 @@ server.put('/:session/:filename', (req, res, next) => {
             record.assets[fileKey] = {
               path: filePath,
               modified: Date.now(),
+              size: req.params.data.length,
+              mime: mime.lookup(filePath),
               updated: 0,
               hash: filehash,
             };
@@ -213,14 +224,31 @@ server.put('/:session/:filename', (req, res, next) => {
         });
     }
   });
-  next();
-});
+  return next();
+}
+
+server.put('/:session/:filename', putAndPostHandler);
+server.post('/:session/:filename', putAndPostHandler);
 
 /* ##################### GET /:session//:filename ########################### */
 server.get('/:session/:filename', (req, res, next) => {
   const dirPath = path.join(fileBaseDir, req.params.session);
   const filePath = path.join(dirPath, req.params.filename);
   const fileKey = req.params.filename.split('.')[0];
+  db.find({
+    sessionId: req.params.session,
+  }, (err, docs) => {
+    if (docs.length === 0) {
+      log.info(`No record found with ID: ${req.params.session}`);
+    } else if (docs.length === 1) {
+      const sessionObject = docs[0];
+      if (fs.statSync(sessionObject.assets[fileKey].path).isFile()) {
+        res.writeHead(200, { 'Content-Type': sessionObject.assets[fileKey].mime });
+        const fd = fs.createReadStream(sessionObject.assets[fileKey].path);
+        fd.pipe(res);
+      }
+    }
+  });
   next();
 });
 server.listen(port);
