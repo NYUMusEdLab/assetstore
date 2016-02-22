@@ -240,15 +240,63 @@ server.get('/:session/:filename', (req, res, next) => {
   }, (err, docs) => {
     if (docs.length === 0) {
       log.info(`No record found with ID: ${req.params.session}`);
+      res.json(404, {
+        status: 404,
+        message: `No record found wth ID ${req.params.session}`,
+      });
     } else if (docs.length === 1) {
       const sessionObject = docs[0];
       if (fs.statSync(sessionObject.assets[fileKey].path).isFile()) {
         res.writeHead(200, { 'Content-Type': sessionObject.assets[fileKey].mime });
         const fd = fs.createReadStream(sessionObject.assets[fileKey].path);
         fd.pipe(res);
+      } else {
+        res.json(404, {
+          status: 404,
+          message: `There was no file available for the key ${req.params.filename}`,
+        });
       }
     }
   });
   next();
+});
+
+/* ##################### DELETE /:session//:filename ########################### */
+server.del(':/session/:filename', (req, res, next) => {
+  const dirPath = path.join(fileBaseDir, req.params.session);
+  const filePath = path.join(dirPath, req.params.filename);
+  const fileKey = req.params.filename.split('.')[0];
+  db.find({
+    sessionId: req.params.session,
+  }, (err, docs) => {
+    if (docs.length === 0) {
+      log.info(`No record found with ID: ${req.params.session}`);
+      res.json(404, {
+        status: 404,
+        message: `No record found wth ID ${req.params.session}`,
+      });
+    } else if (docs.length === 1) {
+      const sessionObject = docs[0];
+      if (fs.statSync(sessionObject.assets[fileKey].path).isFile()) {
+        fs.unlink(sessionObject.assets[fileKey].path).then(() => {
+          res.json(200, {
+            status: 200,
+            message: 'File deleted successfully',
+          }, (err) => {
+            res.json(200, {
+              status: 200,
+              message: 'File was probably deleted successfully',
+              error: err,
+            });
+          });
+        });
+      } else {
+        res.json(200, {
+          status: 200,
+          message: 'File was not found. Presumed deleted.',
+        });
+      }
+    }
+  });
 });
 server.listen(port);
